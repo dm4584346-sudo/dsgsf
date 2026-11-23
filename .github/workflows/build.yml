@@ -1,0 +1,39 @@
+name: Build IPA
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip project
+        run: |
+          ZIP=$(ls *.zip | head -n 1)
+          echo "Archive: $ZIP"
+          unzip -q -o "$ZIP" -d src
+          P=$(find src -name project.yml -not -path '*__MACOSX*' | head -n 1)
+          echo "PROJ=$(dirname "$P")" >> "$GITHUB_ENV"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build app
+        run: |
+          cd "$PROJ"
+          xcodegen generate
+          xcodebuild -project BankCourse.xcodeproj -scheme BankCourse \
+            -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/BankCourse.app Payload/
+          zip -qry "$GITHUB_WORKSPACE/BankCourse.ipa" Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BankCourse-ipa
+          path: BankCourse.ipa
